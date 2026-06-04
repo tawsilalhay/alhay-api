@@ -13,7 +13,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 1. الحصول على token
+    // الحصول على token
     const authRes = await fetch('https://restpaylink.com/api/auth', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -24,13 +24,18 @@ export default async function handler(req, res) {
       })
     });
 
-    const authData = await authRes.json();
+    const authText = await authRes.text();
+    console.log('Auth response:', authText);
+    
+    let authData;
+    try { authData = JSON.parse(authText); } 
+    catch(e) { return res.status(500).json({ error: 'Auth parse error', raw: authText }); }
     
     if (!authData.id_token) {
-      return res.status(500).json({ error: 'Auth failed', details: authData });
+      return res.status(500).json({ error: 'No token', details: authData });
     }
 
-    // 2. إنشاء الفاتورة
+    // إنشاء الفاتورة
     const invoiceRes = await fetch('https://restpaylink.com/api/addInvoice', {
       method: 'POST',
       headers: {
@@ -46,25 +51,26 @@ export default async function handler(req, res) {
         clientName: customerName || 'عميل',
         clientMobile: customerPhone || '0500000000',
         clientEmail: 'customer@alhay.app',
-        products: [{
-          title: 'طلب توصيل الحي',
-          price: parseFloat(amount),
-          qty: 1
-        }],
+        products: [{ title: 'طلب توصيل الحي', price: parseFloat(amount), qty: 1 }],
         supportedCardBrands: ['mada', 'visaMastercard', 'applePay'],
         displayPending: true
       })
     });
 
-    const invoiceData = await invoiceRes.json();
+    const invoiceText = await invoiceRes.text();
+    console.log('Invoice response:', invoiceText);
     
+    let invoiceData;
+    try { invoiceData = JSON.parse(invoiceText); }
+    catch(e) { return res.status(500).json({ error: 'Invoice parse error', raw: invoiceText }); }
+
     if (invoiceData.url) {
       return res.status(200).json({ url: invoiceData.url });
     } else {
-      return res.status(500).json({ error: 'No payment URL', details: invoiceData });
+      return res.status(500).json({ error: 'No URL', details: invoiceData });
     }
 
   } catch (error) {
-    return res.status(500).json({ error: 'PayLink error', message: error.message });
+    return res.status(500).json({ error: error.message });
   }
 }
