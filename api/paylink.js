@@ -7,14 +7,13 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const { amount, orderNumber, customerName, customerPhone } = req.body;
+  if (!amount || !orderNumber) return res.status(400).json({ error: 'amount and orderNumber required' });
 
-  if (!amount || !orderNumber) {
-    return res.status(400).json({ error: 'amount and orderNumber required' });
-  }
+  const BASE = 'https://restapi.paylink.sa';
 
   try {
-    // الحصول على token
-    const authRes = await fetch('https://restpaylink.com/api/auth', {
+    // 1. المصادقة
+    const authRes = await fetch(`${BASE}/api/auth`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -24,19 +23,13 @@ export default async function handler(req, res) {
       })
     });
 
-    const authText = await authRes.text();
-    console.log('Auth response:', authText);
-    
-    let authData;
-    try { authData = JSON.parse(authText); } 
-    catch(e) { return res.status(500).json({ error: 'Auth parse error', raw: authText }); }
-    
+    const authData = await authRes.json();
     if (!authData.id_token) {
-      return res.status(500).json({ error: 'No token', details: authData });
+      return res.status(500).json({ error: 'Auth failed', details: authData });
     }
 
-    // إنشاء الفاتورة
-    const invoiceRes = await fetch('https://restpaylink.com/api/addInvoice', {
+    // 2. إنشاء الفاتورة
+    const invoiceRes = await fetch(`${BASE}/api/addInvoice`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -57,13 +50,7 @@ export default async function handler(req, res) {
       })
     });
 
-    const invoiceText = await invoiceRes.text();
-    console.log('Invoice response:', invoiceText);
-    
-    let invoiceData;
-    try { invoiceData = JSON.parse(invoiceText); }
-    catch(e) { return res.status(500).json({ error: 'Invoice parse error', raw: invoiceText }); }
-
+    const invoiceData = await invoiceRes.json();
     if (invoiceData.url) {
       return res.status(200).json({ url: invoiceData.url });
     } else {
