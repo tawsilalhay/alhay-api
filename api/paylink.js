@@ -6,15 +6,15 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { amount, orderNumber, customerName, customerPhone, callbackUrl } = req.body;
+  const { amount, orderNumber, customerName, customerPhone } = req.body;
 
   if (!amount || !orderNumber) {
     return res.status(400).json({ error: 'amount and orderNumber required' });
   }
 
   try {
-    // الحصول على token من PayLink
-    const authRes = await fetch('https://restpaylink.com/api/partner/generateToken', {
+    // 1. الحصول على token
+    const authRes = await fetch('https://restpaylink.com/api/auth', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -25,12 +25,13 @@ export default async function handler(req, res) {
     });
 
     const authData = await authRes.json();
+    
     if (!authData.id_token) {
       return res.status(500).json({ error: 'Auth failed', details: authData });
     }
 
-    // إنشاء طلب الدفع
-    const invoiceRes = await fetch('https://restpaylink.com/api/partner/addInvoice', {
+    // 2. إنشاء الفاتورة
+    const invoiceRes = await fetch('https://restpaylink.com/api/addInvoice', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -40,7 +41,7 @@ export default async function handler(req, res) {
         amount: parseFloat(amount),
         currency: 'SAR',
         orderNumber: orderNumber,
-        callBackUrl: callbackUrl || 'https://alhay.app',
+        callBackUrl: 'https://alhay.app',
         cancelUrl: 'https://alhay.app',
         clientName: customerName || 'عميل',
         clientMobile: customerPhone || '0500000000',
@@ -56,7 +57,12 @@ export default async function handler(req, res) {
     });
 
     const invoiceData = await invoiceRes.json();
-    return res.status(200).json(invoiceData);
+    
+    if (invoiceData.url) {
+      return res.status(200).json({ url: invoiceData.url });
+    } else {
+      return res.status(500).json({ error: 'No payment URL', details: invoiceData });
+    }
 
   } catch (error) {
     return res.status(500).json({ error: 'PayLink error', message: error.message });
